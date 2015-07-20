@@ -625,7 +625,11 @@ github.com注册用户，用户名密码在《Git 权威指南》扉页
 
 
 11:17 2015/7/20
-ubuntu下进入主目录使用组合键ctrl+h显示以.开头的隐藏文件夹，git在ubuntu下的ssh秘钥是以.ssh文件夹的形式存储
+ubuntu下进入主目录使用组合键ctrl+h显示以.开头的隐藏文件夹，git在ubuntu下的ssh秘钥是以.ssh文件夹的形式存储       
+
+
+17:43 2015/7/20
+ubuntu 下git远程同步github搭建成功,需要本地生产SSH,然后在github主页用户注册SSH
 
 
 
