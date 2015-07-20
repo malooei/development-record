@@ -1,2 +1,10 @@
 16:33 2015/7/20
-建立文档，用于常用git命令归纳。
+建立文档，用于常用git命令
+
+ubuntu下安装gitg:
+1:参考文档https://wiki.gnome.org/Apps/Gitg/
+2：apt-get install gitg
+3：安装完成后查找安装路径
+	which gitg
+4:打开gitg:
+	gitg &
