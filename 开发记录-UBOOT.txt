@@ -1,0 +1,1296 @@
+11:46 2015/7/2
+新建此文档
+前言：此文档参考《U-BOOT移植手册（来自谷歌）》进行学习，文件本地地址E:\os资料\Linux\U-BOOT移植手册（来自谷歌）
+
+
+写在前面的话
+======================================================================================================
+本移植手册面向的对象，是对ARM体系结构初步了解，并有一定的汇编基础的初学者，以及ARM的fans。毫不夸张地说，本教程可以使得初学者从一无所知，直
+至完全掌握u-boot移植技术，至此，您真正地入门了！
+
+然而，本移植手册希望达到的目的，不仅仅是ARM的入门。我们希望借助u-boot移植的过程，让大家对系统启动有一个清晰的认识，甚至能自己写出一个boot代
+码来进行项目设计。同时，我们也希望大家能对项目开发使用的C语言，有更深入的掌握和认识。因为在u-boot源代码中，很多思路是我们原先编写小程序中无
+法练习的。
+
+
+
+1.U-BOOT介绍
+======================================================================================================
+1.1 U-BOOT的来源
+======================================================================================================
+U-Boot，全称 Universal Boot Loader，是遵循GPL条款的开放源码项目。
+
+现在，U-Boot作为通用的Bootloader，已经成功地移植到包括PowerPC、ARM、X86、MIPS体系结构的上百种开发板，已经成为功能最多、灵活性最强并且开发最积
+极的开放源码Bootloader。
+
+U-boot对我们来说，最大的优势就是，它加快了项目开发的进度，节省了工程师的时间。
+
+
+1.2 U-BOOT在系统中的地位
+======================================================================================================
+对于一个项目系统来说，u-boot到底处于什么样地位呢？
+目前，在专用的嵌入式板子上运行GNU/Linux系统，应该算比较流行的。对于一个嵌入式Linux系统，从软件的角度看通常可以分为四个层次：
+
+1、引导加载程序。包括固化在固件(firmware)中的boot代码(可选)，和BootLoader两大部分。
+2、Linux内核。特定于嵌入式板子的定制内核以及内核的启动参数。
+3、文件系统。包括根文件系统和建立于Flash内存设备之上文件系统。通常用ramdisk来作为rootfs。
+4、用户应用程序。特定于用户的应用程序。有时在用户应用程序和内核层之间可能还会包括一个嵌入式图形用户界面。常用的嵌入式GUI有：MicroWindows和MiniGUI等。
+
+按照这个层次，U-Boot处于引导加载程序阶段。	
+而在嵌入式系统中，通常并没有像BIOS，因此整个系统的加载启动任务就完全由BootLoader来完成。简单地说，BootLoader就是在操作系统内核运行之前运行的一段小程
+序。
+
+通过这段小程序，我们可以初始化硬件设备、建立内存空间的映射图，从而将系统的软硬件环境带到一个合适的状态，以便为最终调用操作系统内核准备好正确的环境。
+
+通常，BootLoader是严重地依赖于硬件而实现的，特别是在嵌入式世界。因此，在嵌入式世界里建立一个通用的BootLoader几乎是不可能的。
+
+尽管如此，我们仍然可以对BootLoader归纳出一些通用的概念来，以指导用户特定的BootLoader设计与实现。U-Boot适应该“通用性”，成为较为流行的bootloader。
+
+
+
+
+2.U-BOOT移植准备工作
+======================================================================================================
+2.1 U-BOOT源码的获取
+======================================================================================================
+U-Boot的源码包可以从sourceforge网站下载，还可以订阅该网站活跃的U-Boot Users邮件论坛，这个邮件论坛对于U-Boot的开发和使用都很有帮助。
+
+U-Boot软件包下载网站：http://sourceforge.net/project/u-boot。事实上，笔者更喜欢从这里下载源码：ftp://ftp.denx.de/pub/u-boot/ 。因为这里是一个FTP服
+务器，
+
+
+2.2 U-BOOT体系结构
+======================================================================================================
+我们用的是arm硬件平台，我们只关注arm相关的代码。因此，我们可以随时把带有lib_xxx的目录（文件夹）删掉，而只保留lib_arm和lib_generic文件夹。
+
+注意，在删除U-Boot源码包中的文件或者文件夹(目录)时候，务必在相应的目录下打开makefile文件核对一下，需要在makefile文件中修改或删除对应的条目。
+
+这时候，您一定想知道每个文件夹都是干什么的。如果连文件夹是干什么的都不知道，那怎么能放心地删掉某些文件夹或者修改某些文件代码呢？
+我们就先来解释一下这些文件夹。
+
+1 ->	Board:		存放和开发板有关的文件。
+					U-boot支持的每个开发板的文件，都会以子目录的形式存放在baord目录下。比如我们关注的2440开发板，与之最相近的目录，便
+					是SMDK2410文件夹。
+
+					或许，您可以将它更名为您自己的文件夹，比如将SMDK2410文件夹更名为ARM79----这样，您可能会更有成就感！
+
+					
+2 ->	Common:		U-Boot支持的所有命令，都在这个目录中实现。
+					每个命令放在该目录下的一个文件中。一般情况下，我们如果修改该目录下的文件代码，无非是加一些调试信息，打开或关闭一些宏。
+					
+					对于该目录下的C代码，我们无须大幅度修改。除非您想自己增加自己的u-boot命令----同样也很有成就感哦！
+
+					
+3 ->	CPU:		这个目录下，存放的是与cpu架构有关的目录。
+
+					每个目录对应一个架构的cpu。比如我们想移植ARM9的S3C2440，就应该去找ARM920T的目录。其他目录实际上对我们是没有意义的。
+
+					
+4 ->	Disk:		这是要对磁盘的支持。
+
+					我们只移植u-boot的话，那这个对我们也没有意义。
+
+
+5 ->	Doc：		参考文档的意思，这是最没用的，也是最有用的。
+
+					推荐想研究u-boot的同学抽时间阅读一下，有好处。
+
+
+6 ->	Driver:		u-boot支持的所有的驱动代码，默认是放在这个目录下的。
+
+					如果您需要添加自己的驱动代码，也可以放在这里。然后再makefile中加入相应的.o文件名。
+
+
+7 ->	FS:			这个目录下放的是u-boot支持的文件系统。
+
+					目前u-boot已经能支持包括cramfs、fat、fdos、jffs2等文件系统。
+					
+
+8 ->	Include:	这个目录下存放的是头文件。
+
+					U-boot使用的头文件以及对各种硬件平台的系统配置文件都放在这里。
+
+					对于每款特定的开发板，我们都需要修改系统配置文件，它存放在include目录下的configs子目录中。
+					
+					
+9 ->	LIB_xxx:	这是与体系结构相关的库文件。
+
+
+10 ->	Net:		此目录下存放的代码，是有关网络协议的实现的代码。比如TFTP协议的实现就在这里面。
+
+
+11 ->	Post:		上电自检的目录。该目录，我对此一点都没有研究。
+
+
+12 ->	Tools:		生成u-boot的工具的目录。比如创建bin镜像文件等。
+
+
+
+3.U-BOOT源码分析
+======================================================================================================
+3.1 源码入口的解释
+======================================================================================================
+启动代码start.s路径：...\u-boot\source\opt\EmbedSky\u-boot-1.1.6\cpu\arm920t\start.s
+
+start.s也是系统上电后执行的第一个代码。它全部由汇编编写。
+
+在讲述start.s之前，我们先来了解一下，系统怎么知道它要先去start.s里执行代码?
+
+实际上，我们可以通过编写链接文件(lds)和mk文件来告知编译器这些情况。
+Lds文件可以决定一个可执行代码的各个段的存储位置、入口地址等，请参考附录中的文章《u-boot lds文件详解》。
+
+这里来说的Mk文件，是在board/下对应开发板子目录中的mk文件。它指定了TEXT_BASE的地址。
+
+
+
+3.2 stage1:启动分析
+======================================================================================================
+首先是start.s文件，刚才说过了，这个是系统启动后运行的第一个代码，我们详细地分析如下：
+
+
+
+3.2.1 中断向量表的设置
+======================================================================================================
+/*
+ *************************************************************************
+ *
+ * Jump vector table as in table 3.1 in [1]
+ *
+ *************************************************************************
+ */
+
+
+.globl _start
+_start:	b       reset
+	ldr	pc, _undefined_instruction
+	ldr	pc, _software_interrupt
+	ldr	pc, _prefetch_abort
+	ldr	pc, _data_abort
+	ldr	pc, _not_used
+	ldr	pc, _irq
+	ldr	pc, _fiq
+
+_undefined_instruction:	.word undefined_instruction
+_software_interrupt:	.word software_interrupt
+_prefetch_abort:	.word prefetch_abort
+_data_abort:		.word data_abort
+_not_used:		.word not_used
+_irq:			.word irq
+_fiq:			.word fiq
+
+	.balignl 16,0xdeadbeef
+	
+	
+Start.s文件一开始，就定义了_start的全局变量。
+
+这段代码验证了我们之前学过的arm体系的理论知识：中断向量表放在从0x0开始的地方。	
+	
+其中，每个异常中断的摆放次序，是事先规定的。比如第一个必须是reset异常，第二个必须是未定义的指令异常等等。
+
+需要注意的是，在这里，我们也可以理解：为何系统一上电，会自动运行代码。因为系统上电后，会从0x0地方取指令，而0x0处放置的是reset标签，直接就跳
+去reset标签处去启动系统了。
+
+另外，这里使用了ldr指令。而ldr指令中的label，分别用一个.word伪操作来定义。比如:_undefined_instruction: .word undefined_instruction	
+
+我们用source insight跟踪代码后，发现，undefined_instruction在start.s的后面给出了具体的操作，如下：
+undefined_instruction:
+	get_bad_stack
+	bad_save_user_regs
+	bl 	do_undefined_instruction
+
+值得一提的是，当发生异常时，都将执行u-boot-1.2.0\cpu\arm920t\ interrupts.c中定义的中断函数。也就是说，start.s中要跳转的这些中断子程序的代码，
+均在u-boot-1.2.0\cpu\arm920t\ interrupts.c中定义。	
+
+
+
+3.2.2 U-Boot存储器映射定义
+======================================================================================================
+该代码段主要是定义u-boot需要使用的一些映射区的label，比如用户堆区、用户栈区、全局数据结构区等。
+
+
+_TEXT_BASE:
+	.word	TEXT_BASE
+
+.globl _armboot_start
+_armboot_start:
+	.word _start
+
+/*
+ * These are defined in the board-specific linker script.
+ */
+.globl _bss_start
+_bss_start:
+	.word __bss_start
+
+.globl _bss_end
+_bss_end:
+	.word _end
+
+.globl FREE_RAM_END
+FREE_RAM_END:
+	.word	0x0badc0de
+
+.globl FREE_RAM_SIZE
+FREE_RAM_SIZE:
+	.word	0x0badc0de
+
+#ifdef CONFIG_USE_IRQ
+/* IRQ stack memory (calculated at run-time) */
+.globl IRQ_STACK_START
+IRQ_STACK_START:
+	.word	0x0badc0de
+
+/* IRQ stack memory (calculated at run-time) */
+.globl FIQ_STACK_START
+FIQ_STACK_START:
+	.word 0x0badc0de
+#endif
+
+参考图：U-Boot存储器映射
+从上图也可以清晰地发现，堆和栈是有区别的。而且可以看到，用户栈区是向下递减的，即地址减少的方向生长。
+
+
+
+3.2.3 上电后CPU为SVC模式
+======================================================================================================
+reset:
+	/*
+	 * set the cpu to SVC32 mode
+	 */
+	mrs	r0,cpsr
+	bic	r0,r0,#0x1f
+	orr	r0,r0,#0xd3
+	msr	cpsr,r0
+	
+这是系统复位后执行的“第一个代码段”（严格来说不是）。CPU复位后，系统会立即被设置成SVC模式。记得之前有网
+友发帖咨询这个问题，问系统复位后，cpu处于哪个处理器模式。这个代码，就回答了这个问题。	
+
+从这个代码中，我们也可以得到一个对寄存器操作的经验：读—修改--写。这里先把cpsr的值读到r0中，清除掉我们想
+修改的bit位，然后用orr指令来保证其他bit位不被改动，并达到修改寄存器低5位值的目的。最后用msr指令把r0的值
+给cpsr寄存器达到我们的修改目的。
+
+
+
+3.2.4 关闭看门狗
+======================================================================================================
+#if defined(CONFIG_S3C2400) || defined(CONFIG_S3C2410)
+	ldr     r0, =pWTCON
+	mov     r1, #0x0
+	str     r1, [r0]
+	
+根据S3C2440的datasheet文档，系统启动后，看门狗寄存器是被使能的，所以，如果不在预计的时间内“喂狗”，就有
+“被狗咬”的可能。别说啥了，赶紧先喂狗。上面这段代码即为喂狗代码。u-boot代码编写者把它放在CPU上电修改SVC模
+式后的第一个代码，是可以理解的。	
+
+这个代码，也是修改寄存器的代码，它的思路依旧是：读—修改—写。
+
+实际上，u-boot-1.2.0代码在喂狗代码之前，还有一段代码，如下：
+#if defined(CONFIG_S3C2400)
+# define pWTCON		0x15300000
+# define INTMSK		0x14400008	/* Interupt-Controller base addresses */
+# define CLKDIVN	0x14800014	/* clock divisor register */
+#elif defined(CONFIG_S3C2410)
+# define pWTCON		0x53000000
+# define INTMOD     0X4A000004
+# define INTMSK		0x4A000008	/* Interupt-Controller base addresses */
+# define INTSUBMSK	0x4A00001C
+# define CLKDIVN	0x4C000014	/* clock divisor register */
+#endif
+
+这是定义寄存器用的。比如根据S3C2440的datasheet文档，喂狗寄存器pWTCON的寄存器地址是0x15300000，需要定义后才
+能使用。同理，这里还定义了时钟除数寄存器CLKDIVN和中断掩码的INTMSK寄存器的地址。在后续代码中会陆续用到。
+
+
+
+3.2.5 关掉中断
+======================================================================================================
+	/*
+	 * mask all IRQs by setting all bits in the INTMR - default
+	 */
+	mov	r1, #0xffffffff
+	ldr	r0, =INTMSK
+	str	r1, [r0]
+# if defined(CONFIG_S3C2410)
+	ldr	r1, =0x3ff
+	ldr	r0, =INTSUBMSK
+	str	r1, [r0]
+# endif
+
+从注释可以看出此段代码的作用：屏蔽掉所有的irq中断。
+
+事实上，笔者认为这个代码是多余的，只是为了“心里更踏实”而已。因为S3C2440的datasheet文档里明确指出，cpu在复位的
+时候，这个寄存器的值就是0XFFFFFFFF，以防止发生异常中断。
+
+
+
+3.2.6 修改时钟除数寄存器
+======================================================================================================
+	/* FCLK:HCLK:PCLK = 1:2:4 */
+	/* default FCLK is 120 MHz ! */
+	ldr	r0, =CLKDIVN
+	mov	r1, #3
+	str	r1, [r0]
+	
+在u-boot-1.2.0源码中，给CLKDIVN寄存器赋值的是#0x3，表示FCLK:HCLK:PCLK = 1:2:4，这里笔者将其比例改为1:1:1，没啥特
+殊的目的，调试代码的时候试验用的，后来调试完毕，就没有再修改了。		
+
+
+
+3.2.7 调用cpu_init_crit
+======================================================================================================
+/*
+	 * we do sys-critical inits only at reboot,
+	 * not when booting from ram!
+	 */
+#ifndef CONFIG_SKIP_LOWLEVEL_INIT
+	bl	cpu_init_crit
+#endif
+
+此段代码指明：若未定义CONFIG_SKIP_LOWLEVEL_INIT，就执行cpu_init_crit。我们当然不会跳过底层的初始化。因为LOWLEVEL_INIT会
+对我们的SDRAM进行初始化，这对我们的cpu是必要的。
+
+根据source insight的索引，我们转到了cpu_init_crit的代码中：
+
+/*
+ *************************************************************************
+ *
+ * CPU_init_critical registers
+ *
+ * setup important registers
+ * setup memory timing
+ *
+ *************************************************************************
+ */
+
+
+#ifndef CONFIG_SKIP_LOWLEVEL_INIT
+cpu_init_crit:
+	/*
+	 * flush v4 I/D caches
+	 */
+	mov	r0, #0
+	mcr	p15, 0, r0, c7, c7, 0	/* flush v3/v4 cache */
+	mcr	p15, 0, r0, c8, c7, 0	/* flush v4 TLB */
+
+	/*
+	 * disable MMU stuff and caches
+	 */
+	mrc	p15, 0, r0, c1, c0, 0
+	bic	r0, r0, #0x00002300	@ clear bits 13, 9:8 (--V- --RS)
+	bic	r0, r0, #0x00000087	@ clear bits 7, 2:0 (B--- -CAM)
+	orr	r0, r0, #0x00000002	@ set bit 2 (A) Align
+	orr	r0, r0, #0x00001000	@ set bit 12 (I) I-Cache
+	mcr	p15, 0, r0, c1, c0, 0
+
+	/*
+	 * before relocating, we have to setup RAM timing
+	 * because memory timing is board-dependend, you will
+	 * find a lowlevel_init.S in your board directory.
+	 */
+	mov	ip, lr
+	bl	lowlevel_init
+	mov	lr, ip
+	mov	pc, lr
+#endif /* CONFIG_SKIP_LOWLEVEL_INIT */
+
+非常符合我们的思维，我们无效掉了指令cache和数据cache，并禁止MMU与cache。为什么会有这一步呢？笔者曾经深受cache的伤
+害。在调试代码的时候，下载完修改的bin文件后，如果只按复位键，而不关掉板子重新上电，就会造成cache中可能残留之前
+对cache操作的数据。我们称之为“脏数据”，它会映像我们的调试结果，造成假象。
+
+为了使单独编译的C语言程序和汇编程序之间能相互调用，必须为子程序间的调用规定一定的规则。这就是ATPCS规则。
+
+如有兴趣，详情请参考《ARM体系结构与编程》第6章 ATPCS介绍。
+
+
+
+3.2.8 调用lowlevel_init
+======================================================================================================
+这个函数在u-boot-1.2.0\board\smdk2410\lowlevel_init.S文件中。这是对SDRAM的初始化。
+
+_TEXT_BASE:
+	.word	TEXT_BASE
+
+.globl lowlevel_init
+lowlevel_init:
+	/* memory control configuration */
+	/* make r0 relative the current location so that it */
+	/* reads SMRDATA out of FLASH rather than memory ! */
+	ldr     r0, =SMRDATA
+	ldr	r1, _TEXT_BASE
+	sub	r0, r0, r1
+	ldr	r1, =BWSCON	/* Bus Width Status Controller */
+	add     r2, r0, #13*4
+0:
+	ldr     r3, [r0], #4
+	str     r3, [r1], #4
+	cmp     r2, r0
+	bne     0b
+
+	/* everything is fine now */
+	mov	pc, lr
+
+	.ltorg
+/* the literal pools origin */
+
+SMRDATA:
+    .word (0+(B1_BWSCON<<4)+(B2_BWSCON<<8)+(B3_BWSCON<<12)+(B4_BWSCON<<16)+(B5_BWSCON<<20)+(B6_BWSCON<<24)+(B7_BWSCON<<28))
+    .word ((B0_Tacs<<13)+(B0_Tcos<<11)+(B0_Tacc<<8)+(B0_Tcoh<<6)+(B0_Tah<<4)+(B0_Tacp<<2)+(B0_PMC))
+    .word ((B1_Tacs<<13)+(B1_Tcos<<11)+(B1_Tacc<<8)+(B1_Tcoh<<6)+(B1_Tah<<4)+(B1_Tacp<<2)+(B1_PMC))
+    .word ((B2_Tacs<<13)+(B2_Tcos<<11)+(B2_Tacc<<8)+(B2_Tcoh<<6)+(B2_Tah<<4)+(B2_Tacp<<2)+(B2_PMC))
+    .word ((B3_Tacs<<13)+(B3_Tcos<<11)+(B3_Tacc<<8)+(B3_Tcoh<<6)+(B3_Tah<<4)+(B3_Tacp<<2)+(B3_PMC))
+    .word ((B4_Tacs<<13)+(B4_Tcos<<11)+(B4_Tacc<<8)+(B4_Tcoh<<6)+(B4_Tah<<4)+(B4_Tacp<<2)+(B4_PMC))
+    .word ((B5_Tacs<<13)+(B5_Tcos<<11)+(B5_Tacc<<8)+(B5_Tcoh<<6)+(B5_Tah<<4)+(B5_Tacp<<2)+(B5_PMC))
+    .word ((B6_MT<<15)+(B6_Trcd<<2)+(B6_SCAN))
+    .word ((B7_MT<<15)+(B7_Trcd<<2)+(B7_SCAN))
+/*    .word ((REFEN<<23)+(TREFMD<<22)+(Trp<<20)+(Trc<<18)+(Tchr<<16)+REFCNT)	*/	/* HJ_del 100MHz */
+/*    .word 0x32		*/							/* HJ_del 100MHz */
+/*    .word 0x30		*/							/* HJ_del 100MHz */	
+/*    .word 0x30		*/							/* HJ_del 100MHz */
+/*    .word ((REFEN<<23)+(TREFMD<<22)+(Trp<<20)+(Tsrc<<18)+REFCNT)	*/		/* HJ_del 133MHz */
+/*    .word 0xB2		*/							/* HJ_del 133MHz */
+/*    .word 0x20		*/							/* HJ_del 133MHz */	
+/*    .word 0x20		*/							/* HJ_del 133MHz */
+#if CONFIG_133MHZ_SDRAM
+    .word ((REFEN<<23)+(TREFMD<<22)+(Trp<<20)+(Tsrc<<18)+REFCNT)
+    .word 0xB2
+    .word 0xB0
+    .word 0xB0
+#else
+    .word ((REFEN<<23)+(TREFMD<<22)+(Trp<<20)+(Trc<<18)+(Tchr<<16)+REFCNT)
+    .word 0x32
+    .word 0x30
+    .word 0x30
+#endif
+
+该段代码是对SDRAM控制器相关的寄存器赋值，赋值过程中，采用了一个巧妙的做法，把SDRAM控制器初始化需要用到的13个寄存器的值先保存在
+文字池(literal pools)中，然后通过LDR伪指令以及.ltorg来访问这个文字池，获取寄存器的值赋值到对应的寄存器地址中去。
+
+很多同学对此代码的两个地址不理解：SMRDATA 与_TEXT_BASE。不理解这两个地址相减之后，到底是一个什么值。为什么要相减呢？
+其实编译器进行编译，是按照链接文件进行的。也就是说，编译的时候所有的地址都是相对于这个TEXT_BASE计算出来的。而我们的程序是存放在Flash中
+的，ARM上电后，假设从nandflash模式启动，那么它会把Nandflash的前4K加载到内存中开始运行，当然是从0x0这个地址开始运行，所以要求我们的代码
+在还没有搬移到TEXT_BASE（0x38f00000）这个位置以前是不能使用这些label的，只能找到一个相对于0x0的地址出来，才能得到真正的数据。而且这时候，
+我们编译出来的bin文件是存放在0x0000000的，而不是存放在0x38f00000的。
+
+u-boot里SDRAM初始化中的地址问题，网址：http://www.arm79.com/read.php?tid=218。
+
+
+
+3.2.9 代码的搬移
+======================================================================================================
+程序又回到了start.s.
+
+#ifndef CONFIG_SKIP_RELOCATE_UBOOT
+relocate:				/* relocate U-Boot to RAM	    */
+	adr	r0, _start		/* r0 <- current position of code   */
+	ldr	r1, _TEXT_BASE		/* test if we run from flash or RAM */
+	cmp     r0, r1                  /* don't reloc during debug         */
+	beq     clear_bss
+
+	ldr	r2, _armboot_start
+	ldr	r3, _bss_start
+	sub	r2, r3, r2		/* r2 <- size of armboot            */
+#if 1
+	bl  CopyCode2Ram	/* r0: source, r1: dest, r2: size */
+#else
+	add	r2, r0, r2		/* r2 <- source end address         */
+
+copy_loop:
+	ldmia	r0!, {r3-r10}		/* copy from source address [r0]    */
+	stmia	r1!, {r3-r10}		/* copy to   target address [r1]    */
+	cmp	r0, r2			/* until source end addreee [r2]    */
+	ble	copy_loop
+#endif
+#endif	/* CONFIG_SKIP_RELOCATE_UBOOT */
+
+在SDRAM初始化完毕后，我们开始搬移代码，把代码从原先的0x0开始的位置搬移到内存中的适当的位置继续执行。
+为啥要搬移代码？原因可能如下：
+
+1 ->	运行速度的考虑
+		flash的读写速度远小于SDRAM的读写速度，搬移到SDRAM后，可提高运行效率。
+
+2 ->	空间的考虑
+		如果是nandflash启动模式，那么只有4KB的空间供用户使用，实际的代码是永远大于4KB的，因此需要重新开辟空间来进行代码的运行工作。
+
+一时间只能想起这两个原因。欢迎广大网友补充。
+
+		
+		
+3.2.10 栈空间的设置
+======================================================================================================
+	/* Set up the stack						    */
+stack_setup:
+	ldr	r0, _TEXT_BASE		/* upper 128 KiB: relocated uboot   */
+	sub	r0, r0, #CFG_MALLOC_LEN	/* malloc area                      */
+	sub	r0, r0, #CFG_GBL_DATA_SIZE /* bdinfo                        */
+
+#ifdef CONFIG_USE_IRQ
+	sub	r0, r0, #(CONFIG_STACKSIZE_IRQ+CONFIG_STACKSIZE_FIQ)
+#endif
+	sub	sp, r0, #12		/* leave 3 words for abort-stack    */
+	
+这段代码是用来分配各个栈空间的。包括分配动态内存区，全局数据区，IRQ和FIQ的栈空间等。	
+
+
+
+3.2.11 BSS段的清零
+======================================================================================================
+clear_bss:
+	ldr	r0, _bss_start		/* find start of bss segment        */
+	ldr	r1, _bss_end		/* stop here                        */
+	mov 	r2, #0x00000000		/* clear                            */
+
+clbss_l:str	r2, [r0]		/* clear loop...                    */
+	add	r0, r0, #4
+	cmp	r0, r1
+	ble	clbss_l
+	
+本段代码先设置了BSS段的起始地址与结束地址，然后循环清楚所有的BSS段。	
+
+至此，所有的cpu初始化工作（stage1阶段）已经全部结束了。
+
+后面的代码，将通过ldr pc, _start_armboot，进入C代码执行。
+
+这个C入口的函数，是在u-boot-1.1.6\lib_arm\board.c文件中。
+
+它标志着后续将全面启动C语言程序，同时它也是整个u-boot的主函数。	
+
+
+
+3.3 stage2:C代码分析
+======================================================================================================
+上节提到，start_armboot函数不仅标志着后续将全面启动C语言程序，同时它也是整个u-boot的主函数。
+
+start_armboot 路径...\u-boot\source\opt\EmbedSky\u-boot-1.1.6\lib_arm\board.c
+
+那么该函数完成什么操作呢？
+
+
+
+3.3.1 为gd与bd分配空间
+======================================================================================================
+以下示例代码位于start_armboot
+
+	/* Pointer is writable since we allocated a register for it */
+	gd = (gd_t*)(_armboot_start - CFG_MALLOC_LEN - sizeof(gd_t));
+	/* compiler optimization barrier needed for GCC >= 3.4 */
+	__asm__ __volatile__("": : :"memory");
+
+	memset ((void*)gd, 0, sizeof (gd_t));
+	gd->bd = (bd_t*)((char*)gd - sizeof(bd_t));
+	memset (gd->bd, 0, sizeof (bd_t));
+
+如同使用变量之前，需要声明定义一样，这里使用全局变量gd和bd之前，我们需要先设置它的地址，并用memset函数为它分配合适的空间。	
+	
+u-boot的注释告知我们，gd和bd是一个可写的指针，实际上不过是一个地址而已。
+
+代码中的这句话：__asm__ __volatile__("": : :"memory");目的就是告诉编译器内存被修改过了。
+
+更详细的关于C程序中内嵌汇编的文档，请参考附录中的文献《ARM GCC 内嵌（inline）汇编手册》。
+
+
+
+3.3.2 执行初始化列表函数
+======================================================================================================
+以下示例代码段位于start_armboot
+
+	for (init_fnc_ptr = init_sequence; *init_fnc_ptr; ++init_fnc_ptr) {
+		if ((*init_fnc_ptr)() != 0) {
+			hang ();
+		}
+	}
+
+这是一个for语句，却完成了板子初始化列表函数的功能。
+
+用source insight跟踪init_sequence后发现，它是一个指针数组：
+
+init_fnc_t *init_sequence[] = {
+	cpu_init,		/* basic cpu dependent setup */
+	board_init,	/* basic board dependent setup */
+	interrupt_init,	/* set up exceptions */
+	env_init,		/* initialize environment */
+	init_baudrate,	/* initialze baudrate settings */
+	serial_init,	/* serial communications setup */
+	console_init_f,	/* stage 1 init of console */
+	display_banner,	/* say that we are here */
+#if defined(CONFIG_DISPLAY_CPUINFO)
+	print_cpuinfo,	/* display cpu info (and speed) */
+#endif
+#if defined(CONFIG_DISPLAY_BOARDINFO)
+	checkboard,	/* display board info */
+#endif
+	dram_init,	/* configure available RAM banks */
+	display_dram_config,
+	NULL,
+};	
+	
+指针数组的每个成员都对应着一个函数名（函数指针），指向的是init_fnc_t类型的函数。For语句每次都会判断当前的函数是不是NULL，如
+果是，则跳出for语句，完成当前的板子初始化列表函数的功能。
+
+可能有的同学对此不太理解，为啥非得用一个typedef呢？
+
+我们看到了在初始化列表函数之前，有一个新的数据类型，它是个typedef语句：
+typedef int (init_fnc_t) (void);
+
+顺序初始化硬件程序中包括：
+Cpu_init			->	并没有做实质性的工作，而且我们现在暂时没有定义CONFIG_USE_IRQ，因此，代码执行到这里，直接就return 0;
+
+Board_init			->	是初始化与硬件平台有关的函数。
+						它的工作很明显：时钟的设置，引脚IO口的设置，并且在这里把数据cache和指令cache也打开了。
+						以上工作的完成，标志着板子已经准备好工作了。
+						当然，考虑到可能系统会发生意外中断，所以我们还需要初始化中断，让中断也准备好工作，因此u-boot代码中下一步就开始了中断的初始化。
+						
+
+interrupt_init		->	这实际上是定时器的中断初始化。
+						怎么代码中只有TCFG0的设置，没有TCFG1的设置？
+						很明显，TCFG1采用的是默认值。然后配置寄存器的下载值，最后打开启动开关，启动定时器工作。
+
+						
+env_init			->	这是对我们板子的环境做出初始化配置。
+						顺便提一下，我们修改的配置文件里，用的是nand flash来存放环境变量的值。
+
+						#define CFG_ENV_IS_IN_NAND		1
+						#define CFG_ENV_OFFSET			0x40000
+						#define CFG_ENV_SIZE64			0xc000	/* Total Size of Environment Sector */
+						#if(CONFIG_64MB_Nand == 1)
+						#define CFG_ENV_SIZE			0xc000	/* Total Size of Environment Sector */
+						#else
+						#define CFG_ENV_SIZE			0x20000	/* Total Size of Environment Sector */
+						#endif
+						
+						因此，我们在进入u-boot命令行之后，运行的关于环境变量的操作，只要它被保存，saveenv，肯定是save在nandflash中的某个位置。
+				
+				
+init_baudrate		->	初始化波特率。我们心里要很明确，初始化波特率，目的只有一个：让串口打印调试信息。
+						因此，下一个函数，肯定是串口的初始化函数。
+
+
+serial_init			->	串口的初始化函数。这里调用了另一个函数来配置串口寄存器：serial_setbrg();
+						在这个函数中，我们看到了关于串口的5个寄存器的配置。
+
+
+console_init_f		->	这个函数的功能只有一个，就是指出我们目前是使用串口的，因此有此句：gd->have_console = 1
+
+
+display_banner		->	现在串口初始化完毕，我们可以打印信息了。这是u-boot代码中第一次打印信息。我们可以在这里加入我们自己的代码.
+						出现打印信息后，可以说，u-boot移植已经成功了一半。有了打印信息，我们可以随时用打印信息来调试。“点灯大法”，
+						你可以睡觉去了。
+
+
+
+3.3.3 配置可用的flash区：flash_init
+======================================================================================================						
+以下示例代码段位于start_armboot
+
+/* configure available FLASH banks */
+size = flash_init ();
+	
+当您跟踪到flash_init函数的时候，您会发现，这里只兼容AMD系列的flash芯片，比如LV400及LV800。
+
+如果您的开发板上刚好就是AMD的芯片，那么恭喜，您可能就不需要修改flash ID号了。						
+						
+如果用的开发板上用的是EON生产的flash芯片，只好把AMD的所有代码，都改成EON的代码						
+						
+						
+						
+3.3.4 初始化内存分配函数
+======================================================================================================						
+以下示例代码段位于start_armboot
+
+mem_malloc_init函数，这是非常关键的一步，请大家引起注意。
+
+static
+void mem_malloc_init (ulong dest_addr)
+{
+	mem_malloc_start = dest_addr;
+	mem_malloc_end = dest_addr + CFG_MALLOC_LEN;
+	mem_malloc_brk = mem_malloc_start;
+
+	memset ((void *) mem_malloc_start, 0,
+			mem_malloc_end - mem_malloc_start);
+}
+
+我们必须配置好内存的起始地址和结束地址，然后把这块区域清零，以便后续来使用它。
+
+
+
+3.3.5 nand flash的初始化
+======================================================================================================						
+这部分代码，可能隐含是不执行的。如果您想使用它，需要自行打开，然后添加自己的nand flash驱动的代码。
+
+
+后面的代码，一直到main_loop函数，我们都不需要修改！！！
+
+main_loop函数是进入命令循环的函数，它接受用户从串口输入的命令，然后执行相应的工作，这也是整个u-boot的工作循环。
+
+注意，它并没有使用中断来触发命令的操作，而是用循环来做这部分的工作：
+/* main_loop() can return to retry autoboot, if so just run it again. */
+for (;;) {
+main_loop ();
+}
+
+至此，u-boot代码的分析接近尾声。
+
+
+	
+4.U-BOOT移植过程参考
+======================================================================================================
+4.1 移植准备
+======================================================================================================
+源码包的获取，请参考本文档“2.1章节 u-boot源码的获取”
+
+
+4.2 U-BOOT移植过程分析
+======================================================================================================
+说明：交叉编译工具的制作，请自行完成！事实上，许多开发板厂商都给出了详细的制作过程供用户参考。
+
+
+4.2.1  修改Makefile文件
+======================================================================================================
+若研究u-boot,请抽时间浏览一下u-boot根目录下的readme文档。这将对您理解u-boot大有帮助。
+
+根目录中打开makefile文件查找“smdk2400_config”，找到后，您会看到如下代码：
+sbc2410x_config: unconfig
+	@$(MKCONFIG) $(@:_config=) arm arm920t sbc2410x NULL s3c24x0
+
+我们解释一下代码：
+arm				->		就表示现在用的是CPU的架构是arm体系结构。
+arm920t			->		指明这是cpu的内核类型，它对应于cpu/arm920t目录
+Smdk2400		->		这是开发板的型号，它的目录在board/smdk2400目录下。您也可以自己命名您的开发板。比如：ARM79。
+NULL			->		表示开发者或者经销商是谁（vender）。
+S3c24x0			->		表示开发板上的cpu是啥。对于我们来说，当然是S3C2440了。
+
+例如：
+根据以上的解释，我们可以自己模仿着建立自己的编译项：
+arm79_config : unconfig
+@$(MKCONFIG) $(@:_config=) arm arm920t arm79 NULL s3c24x0
+OK，修改完毕，可以保存、退出makefile。
+
+
+
+4.2.2  建立自己的开发板文件
+======================================================================================================
+为了使得u-boot具有自己的特征，我们需要在board目录下建立自己的文件：
+1、复制board/smdk2410，并更名为board/arm79。
+2、复制board/smdk2410/smdk2410.c，并更名为board/arm79/arm79.c
+OK，我们的开发板是自己花钱买的，现在开发板上面跑的u-boot，我们也可以假装是自己写的代码了。
+
+
+
+4.2.3  建立自己的配置文件
+======================================================================================================
+配置文件在：include/configs/xxx.h,可以保留内容重命名，假装是自己写的代码了
+
+
+
+4.2.4  修改交叉编译工具的路径
+======================================================================================================
+交叉编译工具，您可以使用开发板公司为您提供的制作包即可。
+
+修改交叉编译工具的路径，请参考每个开发板公司的用户手册。
+
+一般都是在/etc/profile文件下修改，增加一个.bin目录。
+
+
+
+4.2.5  测试编译u-boot-1.2.0版本
+======================================================================================================
+其实，u-boot虽然号称经典，但是有些版本在某些特定的arm平台或者powerpc平台是编译不通过的
+
+
+
+4.2.6  修改配置文件
+======================================================================================================
+配置文件在：include/configs/xxx.h，根据实际情况自己修改。
+
+
+
+4.2.7  修改start.s文件
+======================================================================================================
+这是系统启动运行的第一个文件，事实上，没有必要修改这个。
+
+
+
+4.2.8  修改board/arm79/arm79.c
+======================================================================================================
+这个文件是由原来的board/smdk2410/smdk2410.c来的，根据实际情况自己修改。
+
+
+
+4.2.9  修改cpu/arm920t/s3c24x0/speed.c	
+======================================================================================================
+
+
+
+4.2.10 修改board.c文件
+======================================================================================================
+由于在修改的时候，还未编写nand flash驱动的代码，所以这时候最好屏蔽掉nand_init函数。本文件中的其他函数不需要修改。
+
+
+
+4.2.11 重新编译u-boot
+======================================================================================================
+现在，我们可以试一下之前修改的u-boot是否可行。我们执行命令：cd u-boot-1.2.0进入u-boot根目录，然后make一下，执行编译。
+
+当生成u-boot.bin文件后，把它用JTAG软件烧到nor flash或者nand flash中，启动开发板。
+如果之前的修改工作正确的话，就会出现如下界面（根据实际情况而定，有输出数据说明运行成功）：
+*************************************************
+* *
+* ARM技术交流网欢迎您! *
+* www.arm79.com *
+* *
+*************************************************
+
+说明您的u-boot移植工作基本完成。但是，我们还需要验证一下它是否可以执行我们需要的命令。
+
+所以，我们在这里一边介绍u-boot命令，一边演示。
+
+
+
+5.U-BOOT命令
+======================================================================================================
+5.1 Help命令
+======================================================================================================
+和linux的shell命令一样，我们同样可以用help，甚至只用一个“？”就能查当前u-boot版本中支持的所有命令。
+[arm79-uboot-1.2.0]# help
+nand - NAND sub-system
+......
+
+以上就是u-boot-1.2.0支持的命令了。我们查看这些命令列表，发现它们都只列出了命令，并没有列出具体的参数选项。
+
+help命令也提供了更详细的帮助信息，比如，我们想知道当前nand命令的详细选项信息，我们只要这么做：
+[arm79-uboot-1.2.0]# help nand
+nand info - show available NAND devices
+.......
+
+我们看到了有关nand命令的所有的选项以及更详细的信息。比如我们想查看当前nand flash中的信息，那么，我们就可以执行：
+[arm79-uboot-1.2.0]# nand info
+
+
+
+5.2 flinfo命令
+======================================================================================================
+由于上一节中举例nand flash的命令，所以本节赶紧说一下nor flash的命令：flinfo。
+
+
+
+5.3 version与date命令
+======================================================================================================
+现在来看下最基本的版本显示信息：version
+[arm79-uboot-1.2.0]# version
+U-Boot 1.2.0 (Dec 2 2009 - 16:51:34)
+
+打印当前时间的命令date：
+[arm79-uboot-1.2.0]# date
+Date: 2008-12-25 (Thursday) Time: 14:02:33
+
+
+
+5.4 coninfo命令
+======================================================================================================
+这是打印所有控制设备的信息，如：
+[arm79-uboot-1.2.0]# coninfo
+List of available devices:
+serial 80000003 SIO stdin stdout stderr
+
+
+5.5 printenv命令
+======================================================================================================
+环境变量的设置，最常用的u-boot命令了。敲入它，我们可以知道当前的环境的一些设置：
+[arm79-uboot-1.2.0]# printenv
+bootdelay=3
+baudrate=38400
+netmask=255.255.255.0
+ipaddr=192.168.0.104
+serverip=192.168.0.101
+dns=192.168.0.1
+stdin=serial
+stdout=serial
+stderr=serial
+Environment size: 150/131068 bytes
+
+
+
+5.6 setenv命令
+======================================================================================================
+我们可以使用setenv命令来设置u-boot的环境变量。
+从printenv打印的信息看出，我们的IP是192.168.0.104，现在，我们要用setenv命令改为：192.168.0.104，试试看：
+
+[arm79-uboot-1.2.0]# setenv ipaddr 192.168.0.105
+[arm79-uboot-1.2.0]# printenv
+bootdelay=3
+baudrate=38400
+netmask=255.255.255.0
+serverip=192.168.0.101
+dns=192.168.0.1
+stdin=serial
+stdout=serial
+stderr=serial
+ipaddr=192.168.0.105
+Environment size: 150/131068 bytes
+
+当我们printenv之后，我们发现，在环境变量打印信息的后面出现了刚刚设置的192.168.0.105。现在我们已经把IP改为这个值了。
+
+注意，这时候的IP地址，是在内存中的。内存，掉电丢失。所以如果现在掉电，那刚设置的IP地址自然也丢掉了。
+
+赶紧保存下咯，防止突发掉电，导致我们设置的IP丢了。
+
+
+
+5.7 saveenv命令
+======================================================================================================
+我们把刚才设置的IP地址保存到nand flash中：
+[arm79-uboot-1.2.0]# saveenv
+Saving Environment to NAND...
+Erasing Nand...Writing to Nand... done
+
+打印信息提示：写到nand flash，已经done了。可是我们还是不放心。主动重启一下，看看是不是真的保存到nand flash中了
+
+
+
+5.8 cmp命令
+======================================================================================================
+这是对两段内存地址开始的数据进行比较：
+
+[arm79-uboot-1.2.0]# cmp 0x30002000 0x30004000 30
+word at 0x30002010 (0x73cc33cc) != word at 0x30004010 (0x7bcc33cc)
+Total of 4 words were the same
+[arm79-uboot-1.2.0]#
+
+最后的参数30，表示从这两个地址开始的30个单元进行比较。	
+
+
+
+5.9 cp命令
+======================================================================================================
+很熟悉的命令，linux里面我们最经常用cp来复制文件到另一个地方了。
+甚至用它来更改文件的名字。
+在u-boot里，cp照样是复制的意思，我们看如下演示：
+
+[arm79-uboot-1.2.0]# help cp
+cp [.b, .w, .l] source target count
+- copy memory
+[arm79-uboot-1.2.0]# cp 0x30000000 0x30000100 16
+[arm79-uboot-1.2.0]#
+
+那如何来验证我们的复制功能是否正常呢？好办，我们已经介绍了cmp命令，刚好派上用场：
+
+[arm79-uboot-1.2.0]# cmp 0x30000000 0x30000100 16
+Total of 22 words were the same
+[arm79-uboot-1.2.0]#
+
+u-boot移植成功后，cp命令必须是对的！
+我们用cmp命令验证后，打印出：Total of 22 words were the same。
+
+
+
+5.10 mm命令
+======================================================================================================
+MM命令，和刚才介绍的几个命令，实际上本质是一样的，都是去检测内存，然后打印内存单元的数据。
+
+mm命令是说，按顺序显示指定地址往后的内存单元的内容，地址会自动递增，同时我们还可以去修改这些内存单元内容：
+
+我们敲入mm 0x30000000，想查看内存首地址开始的单元是啥内容，如果确认就是这个内容，我们直接按回车，显示下个单元的内容：
+[arm79-uboot-1.2.0]# mm 0x30000000
+30000000: ea000012 ?
+30000004: e59ff014 ?
+
+那我想修改内存中的数据呢？
+在敲入mm 0x30000000，回车后，显示：
+[arm79-uboot-1.2.0]# mm 0x30000000
+30000000: ea000012 ?
+
+这时候，不敲回车了，我们直接输入FFFF，大家也试试看，会是啥结果呢？
+
+我们来试下，笔者这时候直接敲入FFFF：
+[arm79-uboot-1.2.0]# mm 0x30000000
+30000000: ea000012 ? ffff
+30000004: e59ff014 ?
+
+然后按“ctrl + C”，终止当前的命令执行。可以多按几个，反正无所谓。
+然后，我们使用mm命令，查看刚才修改过的内存：
+[arm79-uboot-1.2.0]# mm 0x30000000
+30000000: 0000ffff ?
+
+看到了！内存地址0x30000000单元的数据，已经被笔者修改成0x0000ffff，而不是刚开始的：ea000012。
+
+
+
+5.11 mtest命令
+======================================================================================================
+不知道您用过windows XP下的memtest小软件吗？
+可以测试内存条的好坏。它的原理就是不断地去读写内存条的每个地址单元，来验证该内存单元是否是好的。
+
+Mtest命令，就是实现这个功能，呵呵，u-boot其实蛮强大的！我们来测试0x30000000，这个地址。
+
+[arm79-uboot-1.2.0]# mtest 0x30000000
+Pattern 00000001 Writing... Reading...
+
+
+
+5.12 mw命令
+======================================================================================================
+向内存写入数据的命令，我们help一下，发现很简单：
+[arm79-uboot-1.2.0]# help mw
+mw [.b, .w, .l] address value [count]
+- write memory
+
+直接写地址，然后写入该地址的数据即可。演示吧！
+我们执行mw命令，往地址0x30000000写入一个数据，然后用mm命令去查看到底有没有写进去：
+[arm79-uboot-1.2.0]# mw 0x30000000 eeeeee
+[arm79-uboot-1.2.0]# mm 0x30000000
+30000000: 00eeeeee ?
+
+执行结果符合我们的预想：我们在地址0x30000000写入了eeeeee，然后mm一下，打印出来了eeeeee这个数据。
+实际上，我们修改或者写入内存单元的数据，还有一个更直观的命令nm，我们来介绍下。
+
+
+
+5.13 nm命令
+======================================================================================================
+我们help一下，然后直接演示：
+[arm79-uboot-1.2.0]# help nm
+nm [.b, .w, .l] address
+- memory modify, read and keep address
+[arm79-uboot-1.2.0]# nm 0x30000000
+30000000: 00eeeeee ? 1234567
+30000000: 01234567 ? abcdefg
+30000000: 00abcdef ?
+
+Help nm执行的结果告诉我们，直接输入地址即可。
+所以我们想修改0x30000000的地址，很简单，直接用nm 0x30000000。
+回车之后，出现：30000000: 00eeeeee ?
+这个00eeeeeee是我们刚才修改的结果。我们不按回车了，直接输入1234567。
+回车，OK！又打印出来30000000的地址，然后显示01234567的数据。
+
+
+
+5.14 md命令
+======================================================================================================
+打印指定内存中的数据：
+[arm79-uboot-1.2.0]# md 0x100
+00000100: ee080f17 ee110f10 e3c00c23 e3c00087 ........#.......
+00000110: e3800002 e3800a01 ee010f10 e1a0c00e ................
+00000120: eb0000b7 e1a0e00c e1a0f00e 00000000 ................
+00000130: 00000000 00000000 00000000 00000000 ................
+00000140: e51fd104 e24dd806 e24dd088 e58de000 ......M...M.....
+00000150: e14fe000 e58de004 e3a0d013 e169f00d ..O...........i.
+00000160: e1a0e00f e1b0f00e e24dd048 e88d1fff ........H.M.....
+00000170: e51f2134 e2422806 e2422088 e892000c 4!...(B.. B.....
+00000180: e28d0048 e28d5034 e1a0100e e885000f H...4P..........
+00000190: e1a0000d eb00010b 00000000 00000000 ................
+000001a0: e51fd164 e24dd806 e24dd088 e58de000 d.....M...M.....
+000001b0: e14fe000 e58de004 e3a0d013 e169f00d ..O...........i.
+000001c0: e1a0e00f e1b0f00e e24dd048 e88d1fff ........H.M.....
+000001d0: e51f2194 e2422806 e2422088 e892000c .!...(B.. B.....
+000001e0: e28d0048 e28d5034 e1a0100e e885000f H...4P..........
+000001f0: e1a0000d eb0000fc 00000000 00000000 ................
+
+
+
+5.15 bdinfo命令
+======================================================================================================
+打印开发板信息，我们在u-boot命令行下敲入bdinfo之后，出现如下信息：
+[arm79-uboot-1.2.0]# bdinfo
+arch_number = 0x0000016A
+env_t = 0x00000000
+boot_params = 0x30000100
+DRAM bank = 0x00000000
+-> start = 0x30000000
+-> size = 0x04000000
+ethaddr = 00:00:00:00:00:00
+ip_addr = 192.168.0.104
+baudrate = 38400 bps
+[arm79-uboot-1.2.0]#
+
+从上面的打印信息，我们看到了，打印出了开发板配置的很多地址，比如内存开始地址为0x30000000大小为64M，即0x04000000
+
+显示MAC地址的时候，我们发现，怎么会是全零呢？ethaddr = 00:00:00:00:00:00很明显，这是我们没有配置MAC地址，在源代码
+中，您会发现，由于开发板上只有DM9000A芯片，我们的MAC地址没有EEPROM可读，只能自己去设置一个MAC，保证在局域网内不和
+其他网卡的MAC冲突即可。
+
+
+
+5.16 ping命令
+======================================================================================================
+从这条命令开始，我们后续慢慢会接触到网络相关的比较常用的命令，在附录E中，我们给出了一些网络协议，希望大家有空也去了解下。
+我们先看ping命令：
+
+[arm79-uboot-1.2.0]# ping 192.168.0.101
+dm9000 i/o: 0x20000300, id: 0x90000a46
+MAC: 08:ef:3e:26:0a:5b
+host 192.168.0.101 is alive
+[arm79-uboot-1.2.0]#
+
+我们的开发板IP是192.168.0.104，PC的IP是192.168.0.101。
+因此用的是ping 192.168.0.101，ping完结果，我们看到了host 192.168.0.101 is alive，说明开发板与主机已经ping通。
+
+
+
+5.17 TFTP命令
+======================================================================================================
+事实上，我们进行项目开发的时候，更经常使用TFTP来下载一些升级版本，而不是usb下载。
+
+[arm79-uboot-1.2.0]# help tftp
+tftpboot [loadAddress] [bootfilename]
+
+完整的命令实际上是tftpboot，后面加地址和bin文件的名字。
+
+我们这里可以做一个试验：用tftpboot命令，把已经编译好的u-boot.bin文件重新下载进去，看看是啥结果。
+
+注意，实际上，我们在用tftp协议，借网口来使u-boot自己升级自己。
+
+-----很爽！我们可以自己升级自己的版本了，可以抛弃usb下载了！
+
+[arm79-uboot-1.2.0]# tftp 0x30000000 u-boot3.bin
+dm9000 i/o: 0x20000300, id: 0x90000a46
+MAC: 08:ef:3e:26:0a:5b
+TFTP from server 192.168.0.101; our IP address is 192.168.0.104
+Filename 'u-boot3.bin'.
+Load address: 0x30000000
+Loading: T ###########################
+done
+Bytes transferred = 133232 (20870 hex)
+[arm79-uboot-1.2.0]#
+
+从打印信息，我们可以看到，服务器是192.168.0.101，也就是我们的PC，下载到our IP：192.168.0.104。
+下载地址是0x30000000，就是我们内存首地址。下载的字节长度是133232字节，大概130KB。
+我们已经把自己编译的u-boot下载到内存里了。
+
+那怎么知道是对是错呢？？
+需要验证。这就是下节介绍的go命令。
+
+
+
+5.18 go命令
+======================================================================================================
+GO命令，功能是直接跳转到可执行文件的入口地址，执行可执行文件。
+
+那么现在，我们go一下，执行这个u-boot.bin文件，看看会是啥样的效果？
+为了查看方便，笔者把刚才的tftpboot下载的打印信息也贴出来了。
+以便您确认：确实是从刚才tftp下载来的u-boot.bin文件：
+
+[arm79-uboot-1.2.0]# tftp 0x30000000 u-boot3.bin
+dm9000 i/o: 0x20000300, id: 0x90000a46
+MAC: 08:ef:3e:26:0a:5b
+TFTP from server 192.168.0.101; our IP address is 192.168.0.104
+Filename 'u-boot3.bin'.
+Load address: 0x30000000
+Loading: T ###########################
+done
+Bytes transferred = 133232 (20870 hex)
+[arm79-uboot-1.2.0]# go 0x30000000
+## Starting application at 0x30000000 ...
+*************************************************
+* *
+* ARM技术交流网欢迎您! *
+* www.arm79.com *
+* *
+*************************************************
+U-Boot 1.2.0 (Dec 14 2009 - 15:34:28)
+U-Boot code: 33F80000 -> 33FA0870 BSS: -> 33FA5BD8
+DRAM: 64 MB
+Nor Flash: 2 MB
+Nand Flash: 256 MiB
+In: serial
+Out: serial
+Err: serial
+[arm79-uboot-1.2.0]#
+
+我们go到0x30000000之后，就又开始执行我们的u-boot了。
+
+但是这里请注意，这个u-boot和刚才我们的启动开发板执行的u-boot是不一样的。这个u-boot是直接下载到内存执行。
+
+我们启动开发板时运行的u-boot，则是事先烧写在flash里面的。笔者烧写在nor flash里。
+
+
+
+5.19 reset命令
+======================================================================================================
+我们reset一下，重新启动开发板，看看效果。
+
+开发板重启后，再一次进入到我们熟悉的“ARM技术交流网欢迎您！”的界面。
+
+[arm79-uboot-1.2.0]# reset
+*************************************************
+* *
+* ARM技术交流网欢迎您! *
+* www.arm79.com *
+* *
+*************************************************
+
+
+
+5.20 set命令
+======================================================================================================
+这个set命令和setenv命令可有本质的区别哈~！
+
+set命令，使得u-boot命令更灵活。它直接可以用我们自己好记的单词来操作一些命令，举个例子：
+
+假设我们感觉printenv，这个命令好难记，可能一不小心会写错哦~，没关系，用set吧：
+[arm79-uboot-1.2.0]# set aa ping 192.168.0.101
+
+这条命令就相当于告诉u-boot，我想把ping 192.168.0.101用aa代替，以后我想ping这个IP，我只要run aa即可。
+
+实际上，这也是一个环境变量的范围哦~我们可以printenv一下就知道了：
+[arm79-uboot-1.2.0]# set aa ping 192.168.0.101
+[arm79-uboot-1.2.0]# printenv
+bootdelay=3
+baudrate=38400
+netmask=255.255.255.0
+serverip=192.168.0.101
+dns=192.168.0.1
+stdin=serial
+stdout=serial
+stderr=serial
+ipaddr=192.168.0.101
+aa=ping 192.168.0.101
+
+呵呵，它已经进入了printenv的势力范围了。
+
+
+
+5.21 run命令
+======================================================================================================
+Run命令，实际上刚才已经提过了。它会运行u-boot已经定义好的命令。
+
+比如刚才我们用set定义好aa这个命令。
+
+OK，我们来执行aa：
+[arm79-uboot-1.2.0]# run aa
+dm9000 i/o: 0x20000300, id: 0x90000a46
+MAC: 08:ef:3e:26:0a:5b
+host 192.168.0.101 is alive
+
+执行run aa，实际上执行的是先前定义好的ping 192.168.0.101。
+
+
+u-boot命令暂且介绍到这里。这是v1.0版本，后续还会有v1.2，v1.3版本和大家见面！
+
+
+
+
+
+
+
+
+18:40 2015/7/3，
+下周进行uboot详细的阅读实践和环境搭建，咨询LIUNX石小慧开发流程。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

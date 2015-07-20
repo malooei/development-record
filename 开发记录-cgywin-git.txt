@@ -1,0 +1,80 @@
+开发记录-HOME
+============================================================================================================
+<Git权威指南>
+============================================================================================================
+
+cygGit命令行命令归纳：
+Page:38
+cygcheck -c cygwin   ->查看Cygwin中安装的软件包版本
+mount 				 ->可以看到windows下的盘符被映射到/cygdrive特殊目录下
+cyqpath				 ->实现windows平台和Cygwin之间目录名称的变换
+						eg:$ cygpath -u e:\\windows
+						   /cygdrive/e/windows	
+
+						   $ cygpath -w ~/
+						   E:\engineer_software_install\git-cygwin\home\malooei\
+Page:38
+locale				 ->查看Cygwin下正在使用的字符集（Cygwin默认使用UTF-8）
+
+Page:41 			 ?PuTTY提供plink.exe作为SSH客户端，替代Cygwin自带的ssh命令 mark:以后基础
+
+
+12:46 2014/9/12
+	
+	新机入手，搭建开发环境，准备搭建GIT环境。
+ 
+	如果需要在windows中快速安装和使用Git，msysGit才是最便捷的方式，之所以将Cygwin放在前面介绍是因为本书在介绍Git原理和其他Git相关软件时用到大量的开源工具，
+在Cygwin下很容易获得这些开源工具，而msysGit要用MSYS则不能满足我们的需求。因此，建议windows平台下学习Git过程中首选Cygwin，当对Git有一定了解后，无论msysGit
+还是tortoiseGit都能应对自如。
+
+20:05 2014/9/12
+	第二篇 Git独奏
+	
+	Git的“别扭”部分源自传统的集中式版本控制系统与以Git为代表的分布式版本控制系统在理念上的巨大差异，部分是因为其设计者Linus Torvalds对Git独特的创新式设计。
+	
+	遇到问题，在输入$ git --version命令时没有返回，但输入$mount时正常，问题已经解决，是因为默认安装的Cygwin没有安装Git软件包，如果在首次安装中忘记，可以再次
+运行Cygwin的安装程序，在Cygwin包管理器界面时，在搜索框中输入git,选择相应版本进行安装。	
+	
+11:16 2014/9/13
+	昨天的环境问题已经解决,开始Git独奏。
+
+
+18:06 2014/9/14
+	靠谱的程序员，从来都是因为写出来的代码靠谱而让自己变得靠谱。二逼的程序员，从来都是通过宣传自己的工具……
+
+
+14:53 2014-9-15
+	MY Q:在cygwin中如果直接往工作区下拷贝一堆源码..这些都是没有被跟踪的文件...如果不想逐个文件的添加...有没有办法直接一次性的添加这堆文件呢...
+	A   :git add .
+	这条命令很实用...能够整体添加
+
+18:48 2014-9-17
+	git 第九章 恢复进度
+	
+	
+11:39 2014/9/26
+	CAN 总线 
+	神州三号使用stm32f103zet6的can外扩TI的VP230 CAN 总线收发芯片来实现CAN总线接口。
+	VP230->TI公司推出的3.3V CAN总线收发器，特性如下：
+	1:supply power->3.3V
+	2:满足HBM模式16KV的ESD防护
+	3：允许总线上最多120个节点
+	4：具有过热关断保护功能
+ 
+
+
+
+
+
+
+11:46 2015/7/17
+搭建github远程版本库
+github.com注册用户，用户名密码在《Git 权威指南》扉页
+
+1客户机：申请ssh
+2:终端github:挂接相应sshkey
+注意：申请新的ssh之前需要清空....\cygwin\home\malooei\.ssh
+
+搭建远程github仓库方法参见：https://help.github.com/articles/generating-ssh-keys/
+
+
