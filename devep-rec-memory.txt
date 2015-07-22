@@ -1,0 +1,7 @@
+17:26 2015/7/22
+基于神州三号开发板开始对flash memory总结归纳，I2C EEPROM,SPIFLASH,SRAM,NORFLASH,NANDFLASH,SD卡读卡器,NAND FLASH U盘；
+					  对总线总结归纳，CAN总线，485总线
+程序基于STM32F103ZET芯片，RT-thread OS,路径为.../Rt-thread-home
+
+
+
