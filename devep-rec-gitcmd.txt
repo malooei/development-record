@@ -8,3 +8,24 @@ ubuntu下安装gitg:
 	which gitg
 4:打开gitg:
 	gitg &
+	
+	
+
+	
+	
+从本地向github推送：
+echo # TEST >> README.md
+git init
+git add README.md
+git commit -m "first commit"
+git remote add origin git@github.com:malooei/TEST.git
+git push -u origin master	
+	
+	
+	
+从github向本地更新：
+git remote add origin git@github.com:malooei/TEST.git
+git pull -u origin master	
+	
+	
+	
