@@ -638,6 +638,14 @@ ubuntu15.04下安装搜狗拼音输入法：
 3:重启ubuntu,切换到搜狗拼音输入法
 
 
+16:31 2015/7/28
+在ubuntu中创建网络共享文件夹需要安装samba,一般情况下ubuntu系统会提示安装
+
+ubuntu下安装eclips方式记录：
+
+
+17:25 2015/8/12
+在github yeejoin-workspace添加零压降lcd-test分支，进行rtgui,touch及iwip探索
 
 
 
